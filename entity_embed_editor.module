@@ -1,0 +1,217 @@
+<?php
+/**
+ * @file
+ * Code for the Entity embed editor feature.
+ */
+
+include_once 'entity_embed_editor.features.inc';
+
+/**
+ * Implements hook_editor_ckeditor_settings_alter().
+ * Added by this patch: https://www.drupal.org/node/2756601
+ * Keys in $settings correspond directly to CKEditor settings.
+ * See http://docs.cksource.com/ckeditor_api/symbols/CKEDITOR.config.html
+ */
+function entity_embed_editor_editor_ckeditor_settings_alter(&$settings, $conf) {
+  // EXAMPLE: Set the options in the format dropdown
+  // $settings['format_tags'] = 'p;h2;h3';
+}
+
+/*
+ * Implements hook_form_FORM_ID_alter().
+ * form_id: entity_embed_dialog_form
+ */
+function entity_embed_editor_form_entity_embed_dialog_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_state['step'] == 'embed') {
+    // Add link field
+    // NOTE the corresponding filter needs to be turned on for this to work, too.
+    $form['attributes']['data-link'] = array(
+      '#title' => t('Link'),
+      '#type' => 'textfield',
+      '#default_value' => isset($form_state['entity_element']['data-link']) ? $form_state['entity_element']['data-link'] : '',
+      '#wrapper_attributes' => array('class' => array('container-inline')),
+      '#attributes' => array('class' => array('container-inline')),
+      '#parents' => array('attributes', 'data-link')
+    );
+
+    // Restrict available view modes (https://www.drupal.org/node/2634316)
+    // Views modes are used to control the image size
+    // Uncomment below to enable
+    /*
+    switch ($form['attributes']['data-entity-embed-display']['#default_value']) {
+      case 'entityreference:entityreference_entity_view':
+        $form['attributes']['data-entity-embed-settings']['view_mode']['#options'] = array(
+          // The list of view modes to allow
+          'embed_small' => 'Small',
+          'embed_medium' => 'Medium',
+          'embed_large' => 'Large',
+          'embed_original' => 'Original',
+        );
+      break;
+    }
+    */
+
+    // Hide 'Show links' and 'User current content language' fields
+    unset($form['attributes']['data-entity-embed-settings']['links']);
+    unset($form['attributes']['data-entity-embed-settings']['use_content_language']);
+  }
+}
+
+/**
+ * Implements hook_filter_info().
+ */
+function entity_embed_editor_filter_info() {
+  // View mode class filter
+  $filters['editor_view_mode_class'] = array(
+    'title' => t('View mode classes'),
+    'process callback' => '_editor_view_mode_class',
+    'tips callback' => '_editor_view_mode_class_tips',
+    'weight' => 5,
+  );
+
+  // Entity link filter
+  $filters['editor_entity_link'] = array(
+    'title' => t('Entity link'),
+    'process callback' => '_editor_entity_link',
+    'weight' => 6,
+  );
+
+  return $filters;
+}
+
+/**
+ * Implements callback_filter_process().
+ *
+ * Adds the view mode to to the class attribute of the wrapper element
+ */
+function _editor_view_mode_class($text) {
+  $result = $text;
+
+  if (stristr($text, 'data-entity-embed-settings') !== FALSE) {
+    $dom = filter_dom_load($text);
+    $xpath = new DOMXPath($dom);
+    foreach ($xpath->query('//*[@data-entity-embed-settings]') as $node) {
+      // Read the data-entity-embed-settings attribute's value, then delete it.
+      $embed_settings = $node->getAttribute('data-entity-embed-settings');
+
+      $view_mode = json_decode($embed_settings)->view_mode;
+
+      // If one of the allowed view modes, add the corresponding class.
+      if (in_array($view_mode, array('embed_medium', 'embed_small', 'embed_large', 'embed_original'))) {
+        $classes = $node->getAttribute('class');
+        $classes = (strlen($classes) > 0) ? explode(' ', $classes) : array();
+        $classes[] = 'size-' . $view_mode;
+        $node->setAttribute('class', implode(' ', $classes));
+      }
+    }
+
+    $result = filter_dom_serialize($dom);
+  }
+
+  return $result;
+}
+
+/**
+ * Implements callback_filter_process().
+ *
+ * Adds links to embedded entity
+ */
+function _editor_entity_link($text) {
+  $result = $text;
+
+  if (stristr($text, 'data-link') !== FALSE) {
+    // Load the text as a DOM object for manipulation.
+    $dom = filter_dom_load($text);
+    $xpath = new DOMXPath($dom);
+    foreach ($xpath->query('//*[@data-link]') as $node) {
+      // Read the data-link attribute's value, then delete it.
+      $link = $node->getAttribute('data-link');
+      $node->removeAttribute('data-link');
+
+      // Sanitize link: decode HTML encoding, limit allowed HTML tags; only
+      // allow inline tags that are allowed by default, plus <br>.
+      $link = filter_xss($link, array('a', 'em', 'strong', 'cite', 'code', 'br'));
+
+      // The link must be non-empty.
+      if (drupal_strlen($link) === 0) {
+        continue;
+      }
+
+      $attributes = array(
+        'href' => $link
+      );
+
+      $tag = $node->tagName;
+
+      $theme_parameters = array(
+        'item' => $node->ownerDocument->saveHTML($node),
+        'tag' => $tag,
+        'link' => $link,
+        'attributes' => $attributes,
+      );
+
+      $entity_link = theme('entity_link', $theme_parameters);
+
+      // Load the altered HTML into a new DOMDocument and retrieve the element.
+      $updated_node = filter_dom_load($entity_link)->getElementsByTagName('body')
+        ->item(0)
+        ->firstChild;
+
+      // Import the updated node from the new DOMDocument into the original
+      // one, importing also the child nodes of the updated node.
+      $updated_node = $dom->importNode($updated_node, TRUE);
+      // Finally, replace the original node with the new node.
+      $node->parentNode->replaceChild($updated_node, $node);
+    }
+
+    $result = filter_dom_serialize($dom);
+  }
+
+  return $result;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function entity_embed_editor_theme() {
+  return array(
+    // Theming for the entity_link filter
+    'entity_link' => array(
+      'variables' => array('item' => NULL, 'link' => '', 'attributes' => array()),
+      'file' => 'entity_embed_editor.theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Displays a warning message for the 'editor' text format
+ */
+function entity_embed_editor_form_filter_admin_format_form_alter(&$form, &$form_state, $form_id) {
+  $format = $form_state['build_info']['args'][0]->format;
+
+  if ($format === 'editor') {
+    drupal_set_message(t('Warning: This configuration form is buggy. The \'Table\', \'Superscript\', and \'Subscript\' buttons don\'t appear in the active toolbar when building from scratch. They should still appear in the actual editor, though. Dragging the buttons into the active toolbar and saving should cause them to retain their positions in the configuration.'), 'warning');
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function entity_embed_editor_theme_registry_alter(&$theme_registry) {
+  // Defined path to the current module.
+  $module_path = drupal_get_path('module', 'entity_embed_editor');
+  // Find all .tpl.php files in this module's folder recursively.
+  $template_file_objects = drupal_find_theme_templates($theme_registry, '.tpl.php', $module_path);
+  // Iterate through all found template file objects.
+  foreach ($template_file_objects as $key => $template_file_object) {
+    // If the template has not already been overridden by a theme.
+    if (!isset($theme_registry[$key]['theme path']) || !preg_match('#/themes/#', $theme_registry[$key]['theme path'])) {
+      // Alter the theme path and template elements.
+      $theme_registry[$key]['theme path'] = $module_path;
+      $theme_registry[$key] = array_merge($theme_registry[$key], $template_file_object);
+      $theme_registry[$key]['type'] = 'module';
+    }
+  }
+}
