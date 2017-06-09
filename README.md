@@ -1,5 +1,7 @@
 # Entity Embed for Drupal 7
 
+A text format for Drupal 7 which uses Entity Embed for handling inline images
+
 ## Getting started
 
 * Download and install the dependencies (`example.make` might be helpful)
