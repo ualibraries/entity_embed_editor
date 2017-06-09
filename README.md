@@ -28,3 +28,7 @@ Entity Embed needs to be patched for `data-align` to work. See https://www.drupa
 * Convert image captions to figures and figcaption elements
 * Render embedded entities
 * Limit allowed HTML tags
+
+## Using the included makefile
+
+Move `example.make` to the root of an existing Drupal 7 site and run `drush make --no-core example.make`
