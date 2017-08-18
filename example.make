@@ -9,7 +9,9 @@ projects[drupal][version] = 7.55
 projects[drupal][overwrite] = TRUE
 
 projects[entity][version] = 1.8
-projects[entityreference][version] = 1.2
+projects[entityreference][version] = 1.5
+; Patch makes entityreference work with entity_embed (https://www.drupal.org/node/2903245)
+projects[entityreference][patch][2903245-1][url] = https://www.drupal.org/files/issues/handle-entity-embed-2903245-1.patch
 projects[file_entity][version] = 2.0-beta3
 projects[editor][version] = 1.0-alpha7
 projects[entity_embed][version] = 3.x-dev

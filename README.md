@@ -15,7 +15,7 @@ A text format for Drupal 7 which uses Entity Embed for handling inline images
 * Entity Embed `entity_embed-7.x-3.x-dev`
 * Editor `editor-7.x-1.0-alpha7`
 * Entity `entity-7.x-1.8`
-* Entity Reference `entityreference-7.x-1.2` (`entity_embed` doesn't work with newer versions of `entityreference`)
+* Entity Reference `entityreference-7.x-1.2` (`entityreference 7.x-1.5` has to be patched in order to work with `entity_embed`, see https://www.drupal.org/node/2903245)
 * File Entity `file_entity-7.x-2.0-beta3`
 
 ## Patches
